@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendar</title>
+
+  <!-- jQuery を先に読み込む -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+  <!-- FullCalendarのCSSとJSをその後に読み込む -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/3.10.2/fullcalendar.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/3.10.2/fullcalendar.min.js"></script>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <h2>Welcome, {{ current_user.username }}</h2>
+  <a href="{{ url_for('logout') }}">Logout</a>
+
+  <h3>Select Year and Month</h3>
+  <form method="GET" action="{{ url_for('calendar') }}">
+    <select name="year" id="yearSelect">
+      {% for year in range(2020, 2031) %}
+        <option value="{{ year }}" {% if year == year %}selected{% endif %}>{{ year }}</option>
+      {% endfor %}
+    </select>
+    <select name="month" id="monthSelect">
+      {% for month in range(1, 13) %}
+        <option value="{{ month }}" {% if month == month %}selected{% endif %}>{{ month }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Show</button>
+  </form>
+
+  <div>
+    <button onclick="window.location.href='{{ url_for('calendar', year=year, month=month-1 if month > 1 else 12) }}'">Previous</button>
+    <button onclick="window.location.href='{{ url_for('calendar', year=year, month=month+1 if month < 12 else 1) }}'">Next</button>
+  </div>
+
+  <h3>Calendar</h3>
+  <div id="calendar"></div>
+
+  <!-- メモ追加フォーム -->
+  <div id="memoForm" style="display: none;">
+    <h3>Add Memo for <span id="memoDate"></span></h3>
+    <form method="POST" action="{{ url_for('add_memo') }}">
+      <input type="hidden" name="date" id="memoDateInput">
+      <textarea name="content" required></textarea><br>
+      <button type="submit">Add Memo</button>
+    </form>
+  </div>
+
+  <h3>Your Memos</h3>
+  <ul>
+    {% for memo in memos %}
+      <li>{{ memo.date }}: {{ memo.content }}</li>
+    {% endfor %}
+  </ul>
+
+  <!-- JavaScript -->
+  <script>
+    $(document).ready(function() {
+        // Flaskから渡された変数をJavaScriptの変数に格納
+        var currentYear = {{ year | tojson }};
+        var currentMonth = {{ month | tojson }} - 1;  // JavaScriptの月は0始まりなので1引きます
+
+        // カレンダーの初期化
+        var calendar = $('#calendar').fullCalendar({
+            header: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'month,agendaWeek,agendaDay'
+            },
+            events: function(start, end, timezone, callback) {
+                $.ajax({
+                    url: '/get_memos',
+                    dataType: 'json',
+                    success: function(data) {
+                        var events = data.map(function(memo) {
+                            return {
+                                title: memo.content,
+                                start: memo.date,
+                                allDay: true
+                            };
+                        });
+                        callback(events);
+                    }
+                });
+            },
+            dayClick: function(date, jsEvent, view) {
+                // 日付クリック時にメモフォームに選択された日付をセット
+                $('#memoDate').text(date.format('YYYY-MM-DD'));
+                $('#memoDateInput').val(date.format('YYYY-MM-DD'));
+                $('#memoForm').show(); // メモ追加フォームを表示
+            },
+            // 年月が変更された際に新しい月を設定
+            defaultView: 'month',
+            defaultDate: moment({ year: currentYear, month: currentMonth }).format('YYYY-MM-DD'), // momentの正しい使い方
+            locale: 'ja',  // 日本語設定
+        });
+
+        // selectボックスで年月を変更した際にカレンダーを更新
+        $('#yearSelect, #monthSelect').change(function() {
+            var newYear = $('#yearSelect').val();
+            var newMonth = $('#monthSelect').val() - 1;  // JavaScriptの月は0始まり
+            calendar.fullCalendar('gotoDate', new Date(newYear, newMonth, 1));  // 新しい月を表示
+        });
+    });
+  </script>
+</body>
+</html>
